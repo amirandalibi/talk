@@ -5,13 +5,14 @@ import { StoryNotFoundError } from "coral-server/errors";
 import { getRequestedFields } from "coral-server/graph/resolvers/util";
 import {
   ACTION_TYPE,
-  decodeActionCounts,
+  decodeActionCounts
 } from "coral-server/models/action/comment";
 import * as comment from "coral-server/models/comment";
 import {
+  getDepth,
   getLatestRevision,
   hasAncestors,
-  hasPublishedStatus,
+  hasPublishedStatus
 } from "coral-server/models/comment/helpers";
 import { createConnection } from "coral-server/models/helpers";
 import { getURLWithCommentID } from "coral-server/models/story";
@@ -19,7 +20,7 @@ import { getCommentEditableUntilDate } from "coral-server/services/comments";
 
 import {
   GQLComment,
-  GQLCommentTypeResolver,
+  GQLCommentTypeResolver
 } from "coral-server/graph/schema/__generated__/types";
 
 import GraphContext from "../context";
@@ -34,7 +35,7 @@ export const maybeLoadOnlyID = (
   const fields = getRequestedFields<GQLComment>(info);
   if (fields.length === 1 && fields[0] === "id") {
     return {
-      id,
+      id
     };
   }
 
@@ -44,23 +45,22 @@ export const maybeLoadOnlyID = (
 };
 
 export const Comment: GQLCommentTypeResolver<comment.Comment> = {
-  body: (c) => (c.revisions.length > 0 ? getLatestRevision(c).body : null),
+  body: c => (c.revisions.length > 0 ? getLatestRevision(c).body : null),
   // Send the whole comment back when you request revisions. This way, we get to
   // know the comment ID. The field mapping is handled by the CommentRevision
   // resolver.
-  revision: (c) =>
+  revision: c =>
     c.revisions.length > 0
       ? { revision: getLatestRevision(c), comment: c }
       : null,
-  revisionHistory: (c) =>
-    c.revisions.map((revision) => ({ revision, comment: c })),
+  revisionHistory: c => c.revisions.map(revision => ({ revision, comment: c })),
   editing: ({ revisions, createdAt }, input, ctx) => ({
     // When there is more than one body history, then the comment has been
     // edited.
     edited: revisions.length > 1,
     // The date that the comment is editable until is the tenant's edit window
     // length added to the comment created date.
-    editableUntil: getCommentEditableUntilDate(ctx.tenant, createdAt),
+    editableUntil: getCommentEditableUntilDate(ctx.tenant, createdAt)
   }),
   author: (c, input, ctx) =>
     c.authorID ? ctx.loaders.Users.user.load(c.authorID) : null,
@@ -85,20 +85,20 @@ export const Comment: GQLCommentTypeResolver<comment.Comment> = {
     );
   },
   // Action Counts are encoded, decode them for use with the GraphQL system.
-  actionCounts: (c) => decodeActionCounts(c.actionCounts),
+  actionCounts: c => decodeActionCounts(c.actionCounts),
   flags: ({ id }, { first, after }, ctx) =>
     ctx.loaders.CommentActions.connection({
       first: defaultTo(first, 10),
       after,
       filter: {
         actionType: ACTION_TYPE.FLAG,
-        commentID: id,
-      },
+        commentID: id
+      }
     }),
   viewerActionPresence: (c, input, ctx) =>
     ctx.user ? ctx.loaders.Comments.retrieveMyActionPresence.load(c.id) : null,
-  parentCount: (c) => (hasAncestors(c) ? c.ancestorIDs.length : 0),
-  depth: (c) => (hasAncestors(c) ? c.ancestorIDs.length : 0),
+  parentCount: c => getDepth(c),
+  depth: c => getDepth(c),
   rootParent: (c, input, ctx, info) =>
     hasAncestors(c)
       ? maybeLoadOnlyID(ctx, info, c.ancestorIDs[c.ancestorIDs.length - 1])
@@ -118,5 +118,5 @@ export const Comment: GQLCommentTypeResolver<comment.Comment> = {
       throw new StoryNotFoundError(storyID);
     }
     return getURLWithCommentID(story.url, id);
-  },
+  }
 };
